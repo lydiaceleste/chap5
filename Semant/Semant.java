@@ -30,6 +30,16 @@ public class Semant {
     return et.exp;
   }
 
+  // private Exp checkComp(ExpTy et, int pos){
+  //   Type x = et.ty.left;
+  
+  //   if(!(a instanceof INT)) && (!(a instanceof STRING))
+  //     (!(a instanceof INT))
+  //     error(pos, "Not of compatible types.");
+  //   }
+  //   return et.exp;
+  // }
+
   ExpTy transExp(Absyn.Exp e) {
     ExpTy result;
 
@@ -86,6 +96,31 @@ public class Semant {
       checkInt(left, e.left.pos);
       checkInt(right, e.right.pos);
       return new ExpTy(null, INT);
+    case Absyn.OpExp.MINUS:
+      checkInt(left, e.left.pos);
+      checkInt(right, e.right.pos);
+      return new ExpTy(null, INT);
+    case Absyn.OpExp.MUL:
+      checkInt(left, e.left.pos);
+      checkInt(right, e.right.pos);
+      return new ExpTy(null, INT);      
+    case Absyn.OpExp.DIV:
+      checkInt(left, e.left.pos);
+      checkInt(right, e.right.pos);
+      return new ExpTy(null, INT);
+   case Absyn.OpExp.EQ:
+      // checkComp(left, e.left.pos);
+      // checkComp(right, e.right.pos);
+      if ((!left.ty.coerceTo(right.ty)) && (!right.ty.coerceTo(left.ty))){
+        error(e.pos, "Operands are incompatible.");
+      }
+      return new ExpTy(null, left.ty);
+      
+    // case Absyn.OpExp.NE
+    // case Absyn.OpExp.LT
+    // case Absyn.OpExp.LE
+    // case Absyn.OpExp.GT
+    // case Absyn.OpExp.GE
     default:
       throw new Error("unknown operator");
     }
@@ -125,21 +160,28 @@ public class Semant {
   // }
 
   ExpTy transExp(Absyn.IfExp e) {
+    //cant handle empty else
     ExpTy test = transExp(e.test);
     checkInt(test, e.test.pos);
     ExpTy thenclause = transExp(e.thenclause);
     ExpTy elseclause = transExp(e.elseclause);
-
+    if(elseclause != null) {
+        if((!thenclause.ty.coerceTo(elseclause.ty)) && !elseclause.ty.coerceTo(thenclause.ty))
+        {
+           error(e.pos, "Then/Else type must match");
+        }
+    }
+    return new ExpTy(null, thenclause.ty);
   }
 
   ExpTy transExp(Absyn.IntExp e) {
       return new ExpTy(null, INT);
     }
 
+
   ExpTy transExp(Absyn.NilExp e) {
     return new ExpTy(null, NIL);
   }
-
   ExpTy transExp(Absyn.StringExp e) {
     return new ExpTy(null, STRING);
   }
