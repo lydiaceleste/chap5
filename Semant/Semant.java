@@ -3,11 +3,11 @@ import Translate.Exp;
 import Types.Type;
 
 
-//LEFT TO COMPLETE
-// Exp: Record, Array, Call, For
-// Var: Field, Subscript
-// Dec: TypeDec, FunctionDec
-// Ty: Name, Record, Array
+// LEFT TO COMPLETE
+//    Exp: Record, Array, Call, For
+//    Var: Field, Subscript
+//    Dec: TypeDec, FunctionDec
+//    Ty: Name, Record, Array
 
 public class Semant {
   Env env;
@@ -37,7 +37,7 @@ public class Semant {
       error(pos, "integer required");
     return et.exp;
   }
-  //&& (!(type == RECORD)) && (!(type == Types.ARRAY)) for some reason are not working
+  //&& (!(type == Types.RECORD)) && (!(type == Types.ARRAY)) for some reason are not working
   private Exp compCheck(ExpTy et, int pos){
     Type type = et.ty.actual();
     if ((!(type == INT)) && (!(type == STRING)) && 
@@ -113,6 +113,12 @@ public class Semant {
     case Absyn.OpExp.GE:
     //NE not done, says ! is an illegal character
     case Absyn.OpExp.NE:
+      compCheck(left, e.left.pos);
+      compCheck(right, e.right.pos);
+      if ((!left.ty.coerceTo(right.ty)) && (!right.ty.coerceTo(left.ty))){
+        error(e.pos, "Operands are incompatible.");
+      }
+      return new ExpTy(null, INT);
     case Absyn.OpExp.EQ:
       compCheck(left, e.left.pos);
       compCheck(right, e.right.pos);
