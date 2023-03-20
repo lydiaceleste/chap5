@@ -264,42 +264,77 @@ public class Semant {
   }
 
   Exp transDec(Absyn.VarDec d) {
-    // NOTE: THIS IMPLEMENTATION IS INCOMPLETE
-    // It is here to show you the general form of the transDec methods
+    // I FINISHED THIS, BUT WONT WORK UNTIL transTY is done!!!!
     ExpTy init = transExp(d.init);
     Type type;
     if (d.typ == null) {
+      if(init.ty.coerceTo(NIL)){
+        error(d.pos, "No record type :(");
+      }
       type = init.ty;
     } else {
-      type = VOID;
-      throw new Error("unimplemented");
+      type = transTy(d.typ);
+      if(!init.ty.coerceTo(type)) {
+        error(d.pos, "Incompatable types :(");
+      }
+      if(type == null) {
+        error(d.pos, "Undefined type:(");
+      }
     }
     d.entry = new VarEntry(type);
     env.venv.put(d.name, d.entry);
     return null;
   }
 
-//Exp transDec(Absyn.TypeDec d) { }
+Exp transDec(Absyn.TypeDec d) { 
+  //inserting names for all types
+  for(Absyn.TypeDec type = d; type != null; type = type.next) {
+      //making sure theyre defined a single time!!
+      for(Absyn.TypeDec x = d; x != type; x = x.next) {
+        if(x.name == type.name){
+          error(x.pos, "This type was alreasy declared!");
+        }
+      }
+      //add it to the environment? idk if this is correct
+      env.tenv.put(type.name, new Types.NAME(type.name));
+  }
+  //have to bind type to name in this loop, and also make sure we arent looping
+  //maybe need the helper function that checks for looping
+  for(Absyn.TypeDec type = d; type != null; type = type.next) {
+      //i do not know how to do that! :)
+      return null;
+  }
+  return null;
+}
+
+
 //Exp transDec(Absyn.FunctionDec d) {
 
 
 
 
-// Type transTy(Ty t){ 
-//     if ((t instanceof NameTy)) {
-//       return transTy((NameTy)t);
-//     }
-//     if ((t instanceof RecordTy)) {
-//       return transTy((RecordTy)t);
-//     }
-//     if ((t instanceof ArrayTy)) {
-//       return transTy((ArrayTy)t);
-//     }
-//     throw new Error("Error translating type :(");
-// }
+Type transTy(Absyn.Ty t){ 
+    if ((t instanceof Absyn.NameTy)) {
+      return transTy((Absyn.NameTy)t);
+    }
+    // if ((t instanceof RecordTy)) {
+    //   return transTy((RecordTy)t);
+    // }
+    // if ((t instanceof ArrayTy)) {
+    //   return transTy((ArrayTy)t);
+    // }
+    throw new Error("Error translating type :(");
+}
 
-//Ty transTy(Absyn.NameTy t) {}
-//Ty transTy(Absyn.ArrayTy t) {}
-//Ty transTy(Absyn.RecordTy t) {}
+Type transTy(Absyn.NameTy t) {
+  Types.Type type = (Types.Type)env.tenv.get(t.name);
+  if (type == null){
+    error(t.pos, "The type " + t.name + "is not defined!");
+    type = INT;
+  }
+  return type;
+}
+//Type transTy(Absyn.ArrayTy t) {}
+//Type transTy(Absyn.RecordTy t) {}
 }
 
