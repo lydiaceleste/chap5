@@ -1,1 +1,1 @@
-while("A" != 5) do x := 7
+while("A" <> 5) do x := 7

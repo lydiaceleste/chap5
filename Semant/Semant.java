@@ -111,7 +111,6 @@ public class Semant {
     case Absyn.OpExp.LE:
     case Absyn.OpExp.GT:
     case Absyn.OpExp.GE:
-    //NE not done, says ! is an illegal character
     case Absyn.OpExp.NE:
       compCheck(left, e.left.pos);
       compCheck(right, e.right.pos);
