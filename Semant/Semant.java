@@ -30,15 +30,15 @@ public class Semant {
     return et.exp;
   }
 
-  // private Exp checkComp(ExpTy et, int pos){
-  //   Type x = et.ty.left;
-  
-  //   if(!(a instanceof INT)) && (!(a instanceof STRING))
-  //     (!(a instanceof INT))
-  //     error(pos, "Not of compatible types.");
-  //   }
-  //   return et.exp;
-  // }
+////* && (!(type == RECORD)) && (!(type == ARRAY))) *// once these are added below
+  private Exp compCheck(ExpTy et, int pos){
+    Type type = et.ty.actual();
+    if ((!(type == INT)) && (!(type == STRING)) && 
+    (!(type == NIL))) {
+      error(pos, "Oh no! Types are not comparable :(");
+    }
+    return et.exp;
+  }
 
   ExpTy transExp(Absyn.Exp e) {
     ExpTy result;
@@ -108,24 +108,23 @@ public class Semant {
       checkInt(left, e.left.pos);
       checkInt(right, e.right.pos);
       return new ExpTy(null, INT);
-   case Absyn.OpExp.EQ:
-      // checkComp(left, e.left.pos);
-      // checkComp(right, e.right.pos);
+    case Absyn.OpExp.LT:
+    case Absyn.OpExp.LE:
+    case Absyn.OpExp.GT:
+    case Absyn.OpExp.GE:
+    //NE not done, says ! is an illegal character
+    case Absyn.OpExp.NE:
+    case Absyn.OpExp.EQ:
+      compCheck(left, e.left.pos);
+      compCheck(right, e.right.pos);
       if ((!left.ty.coerceTo(right.ty)) && (!right.ty.coerceTo(left.ty))){
         error(e.pos, "Operands are incompatible.");
       }
       return new ExpTy(null, left.ty);
-      
-    // case Absyn.OpExp.NE
-    // case Absyn.OpExp.LT
-    // case Absyn.OpExp.LE
-    // case Absyn.OpExp.GT
-    // case Absyn.OpExp.GE
     default:
-      throw new Error("unknown operator");
+      throw new Error("Unknown operator");
     }
   }
-
 
   ExpTy transExp(Absyn.LetExp e) {
     env.venv.beginScope();
@@ -139,11 +138,48 @@ public class Semant {
     return new ExpTy(null, body.ty);
   }
 
-  // ExpTy transExp(Absyn.ArrayExp e) {
+  ExpTy transExp(Absyn.IfExp e) {
+    //cant handle empty else
+    ExpTy test = transExp(e.test);
+    checkInt(test, e.test.pos);
+    ExpTy thenclause = transExp(e.thenclause);
+    ExpTy elseclause = transExp(e.elseclause);
+    if(elseclause != null) {
+        if((!thenclause.ty.coerceTo(elseclause.ty)) && !elseclause.ty.coerceTo(thenclause.ty))
+        {
+           error(e.pos, "Type Mismatch.");
+        }
+    }
+    return new ExpTy(null, thenclause.ty);
+  }
+
+  ExpTy transExp(Absyn.IntExp e) {
+      return new ExpTy(null, INT);
+  }
+
+  ExpTy transExp(Absyn.NilExp e) {
+    return new ExpTy(null, NIL);
+  }
+
+  ExpTy transExp(Absyn.StringExp e) {
+    return new ExpTy(null, STRING);
+  }
+
+  ExpTy transExp(Absyn.SeqExp e) {
+    ExpTy type = new ExpTy(null, VOID);
+    for(Absyn.ExpList exp = e.list; exp != null; exp = exp.tail)
+    {
+      type = transExp(exp.head);
+    }
+    return type;
+  }
+
+
+  // ExpTy transExp(Absyn.RecordExp e) {
 
   // }
 
-  // ExpTy transExp(Absyn.AssignExp e) {
+  // ExpTy transExp(Absyn.ArrayExp e) {
 
   // }
 
@@ -159,50 +195,56 @@ public class Semant {
 
   // }
 
-  ExpTy transExp(Absyn.IfExp e) {
-    //cant handle empty else
-    ExpTy test = transExp(e.test);
-    checkInt(test, e.test.pos);
-    ExpTy thenclause = transExp(e.thenclause);
-    ExpTy elseclause = transExp(e.elseclause);
-    if(elseclause != null) {
-        if((!thenclause.ty.coerceTo(elseclause.ty)) && !elseclause.ty.coerceTo(thenclause.ty))
-        {
-           error(e.pos, "Then/Else type must match");
-        }
+  // ExpTy transExp(Absyn.WhileExp e) {
+// where we would need LoopSemant helper
+  // }
+
+  ExpTy transExp(Absyn.AssignExp e) {
+    ExpTy r = transVar(e.var);
+    ExpTy l = transExp(e.exp);
+    if (!l.ty.coerceTo(r.ty)) {
+      error(e.pos, "Type Mismatch.");
     }
-    return new ExpTy(null, thenclause.ty);
+    return new ExpTy(null, VOID);
   }
 
-  ExpTy transExp(Absyn.IntExp e) {
-      return new ExpTy(null, INT);
+  ExpTy transExp(Absyn.VarExp e) {
+     return transVar(e.var);
+  }
+
+  private ExpTy transVar(Absyn.Var v){
+    if (v instanceof Absyn.SimpleVar)
+      return transVar((Absyn.SimpleVar)v);
+    else if (v instanceof Absyn.FieldVar)
+      return transVar((Absyn.FieldVar)v);
+    else if (v instanceof Absyn.SubscriptVar)
+      return transVar((Absyn.SubscriptVar)v);
+    else throw new Error("Variable of unknown type.");
+
+  }
+
+  ExpTy transVar(Absyn.SimpleVar v) {
+    Entry x = (Entry)env.venv.get(v.name);
+    if (x instanceof VarEntry) {
+      VarEntry vent = (VarEntry)x;
+      return new ExpTy(null, vent.ty.actual());
     }
-
-
-  ExpTy transExp(Absyn.NilExp e) {
-    return new ExpTy(null, NIL);
-  }
-  ExpTy transExp(Absyn.StringExp e) {
-    return new ExpTy(null, STRING);
+    error(v.pos, "Variable is undefined.");
+    return new ExpTy(null, INT);
   }
 
-  // ExpTy transExp(Absyn.VarExp e) {
-  //   return (e.var);
-  // }
+  // ExpTy transVar(Absyn.FieldVar v) {}
 
-  // ExpTy transExp(Absyn.RecordExp e) {
-
-  // }
-
-  // ExpTy transExp(Absyn.SeqExp e) {
-
-  // }
-
+  // ExpTy transVar(Absyn.SubscriptVar v) {}
 
 
   Exp transDec(Absyn.Dec d) {
     if (d instanceof Absyn.VarDec)
       return transDec((Absyn.VarDec)d);
+    if (d instanceof Absyn.TypeDec)
+      return transDec((Absyn.TypeDec)d);
+    if (d instanceof Absyn.FunctionDec)
+      return transDec((Absyn.FunctionDec)d);
     throw new Error("Semant.transDec");
   }
 
@@ -221,6 +263,12 @@ public class Semant {
     env.venv.put(d.name, d.entry);
     return null;
   }
+
+//Exp transDec(Absyn.TypeDec d) { }
+
+//Exp transDec(Absyn.FunctionDec d) {
+
+
 
 }
 
