@@ -2,6 +2,13 @@ package Semant;
 import Translate.Exp;
 import Types.Type;
 
+
+//LEFT TO COMPLETE
+// Exp: Record, Array, Call, For
+// Var: Field, Subscript
+// Dec: TypeDec, FunctionDec
+// Ty: Name, Record, Array
+
 public class Semant {
   Env env;
   public Semant(ErrorMsg.ErrorMsg err) {
@@ -24,13 +31,13 @@ public class Semant {
   static final Types.STRING STRING = new Types.STRING();
   static final Types.NIL    NIL    = new Types.NIL();
 
+
   private Exp checkInt(ExpTy et, int pos) {
     if (!INT.coerceTo(et.ty))
       error(pos, "integer required");
     return et.exp;
   }
-
-////* && (!(type == RECORD)) && (!(type == ARRAY))) *// once these are added below
+  //&& (!(type == RECORD)) && (!(type == Types.ARRAY)) for some reason are not working
   private Exp compCheck(ExpTy et, int pos){
     Type type = et.ty.actual();
     if ((!(type == INT)) && (!(type == STRING)) && 
@@ -42,7 +49,6 @@ public class Semant {
 
   ExpTy transExp(Absyn.Exp e) {
     ExpTy result;
-
     if (e == null)
       return new ExpTy(null, VOID);
     else if (e instanceof Absyn.OpExp)
@@ -63,25 +69,18 @@ public class Semant {
       result = transExp((Absyn.IfExp)e);
     else if (e instanceof Absyn.NilExp)
       result = transExp((Absyn.NilExp)e);
-
     else if (e instanceof Absyn.RecordExp)
       result = transExp((Absyn.RecordExp)e);
-
-     else if (e instanceof Absyn.SeqExp)
-       result = transExp((Absyn.SeqExp)e);
-
-     else if (e instanceof Absyn.StringExp)
-       result = transExp((Absyn.StringExp)e);
-
+    else if (e instanceof Absyn.SeqExp)
+      result = transExp((Absyn.SeqExp)e);
+    else if (e instanceof Absyn.StringExp)
+      result = transExp((Absyn.StringExp)e);
     else if (e instanceof Absyn.IntExp)
         result = transExp((Absyn.IntExp)e);   
-
     else if (e instanceof Absyn.VarExp)
        result = transExp((Absyn.VarExp)e);  
-
      else if (e instanceof Absyn.WhileExp)
        result = transExp((Absyn.WhileExp)e);    
-
     else throw new Error("Semant.transExp");
     e.type = result.ty;
     return result;
@@ -174,30 +173,22 @@ public class Semant {
     return type;
   }
 
+  //mayB use depth for boundary check
+  ExpTy transExp(Absyn.BreakExp e) {
+    return new ExpTy(null, VOID);
+  }
 
-  // ExpTy transExp(Absyn.RecordExp e) {
-
-  // }
-
-  // ExpTy transExp(Absyn.ArrayExp e) {
-
-  // }
-
-  // ExpTy transExp(Absyn.BreakExp e) {
-
-  // }
-
-  // ExpTy transExp(Absyn.CallExp e) {
-
-  // }
-
-  // ExpTy transExp(Absyn.ForExp e) {
-
-  // }
-
-  // ExpTy transExp(Absyn.WhileExp e) {
-// where we would need LoopSemant helper
-  // }
+  int depth = 0;
+  ExpTy transExp(Absyn.WhileExp e) {
+      depth++;
+      Type type = transExp(e.test).ty;
+      if(type != INT) {
+        error(e.pos, "Test clause MUST be an int :(");
+        type = INT;
+      }
+      depth--;
+      return new ExpTy(null, VOID);
+  }
 
   ExpTy transExp(Absyn.AssignExp e) {
     ExpTy r = transVar(e.var);
@@ -211,6 +202,19 @@ public class Semant {
   ExpTy transExp(Absyn.VarExp e) {
      return transVar(e.var);
   }
+
+// ExpTy transExp(Absyn.RecordExp e) {}
+
+// ExpTy transExp(Absyn.ArrayExp e) {}
+
+//ExpTy transExp(Absyn.CallExp e) {}
+    //in CallExp making sure that in the function call the 
+    //passed params match the type of the declared params 
+
+// ExpTy transExp(Absyn.ForExp e) {}
+    //use depth
+    //maybe start another scope?
+
 
   private ExpTy transVar(Absyn.Var v){
     if (v instanceof Absyn.SimpleVar)
@@ -233,9 +237,15 @@ public class Semant {
     return new ExpTy(null, INT);
   }
 
-  // ExpTy transVar(Absyn.FieldVar v) {}
+//MUST HAVE A RECORD!!
+//  ExpTy transVar(Absyn.FieldVar v) {}
 
-  // ExpTy transVar(Absyn.SubscriptVar v) {}
+
+  // ExpTy transVar(Absyn.SubscriptVar v) {
+  //   ExpTy var = transVar(v.var);
+  //   ExpTy index = transExp(v.in);
+
+  // }
 
 
   Exp transDec(Absyn.Dec d) {
@@ -265,10 +275,26 @@ public class Semant {
   }
 
 //Exp transDec(Absyn.TypeDec d) { }
-
 //Exp transDec(Absyn.FunctionDec d) {
 
 
 
+
+// Type transTy(Ty t){ 
+//     if ((t instanceof NameTy)) {
+//       return transTy((NameTy)t);
+//     }
+//     if ((t instanceof RecordTy)) {
+//       return transTy((RecordTy)t);
+//     }
+//     if ((t instanceof ArrayTy)) {
+//       return transTy((ArrayTy)t);
+//     }
+//     throw new Error("Error translating type :(");
+// }
+
+//Ty transTy(Absyn.NameTy t) {}
+//Ty transTy(Absyn.ArrayTy t) {}
+//Ty transTy(Absyn.RecordTy t) {}
 }
 
