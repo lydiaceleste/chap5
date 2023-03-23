@@ -183,15 +183,15 @@ public class Semant {
     return new ExpTy(null, VOID);
   }
 
-  int depth = 0;
+  // int depth = 0;
   ExpTy transExp(Absyn.WhileExp e) {
-      depth++;
+     // depth++;
       Type type = transExp(e.test).ty;
       if(type != INT) {
         error(e.pos, "Test clause MUST be an int :(");
         type = INT;
       }
-      depth--;
+     // depth--;
       return new ExpTy(null, VOID);
   }
 
@@ -208,17 +208,48 @@ public class Semant {
      return transVar(e.var);
   }
 
-// ExpTy transExp(Absyn.RecordExp e) {}
+  // ExpTy transExp(Absyn.RecordExp e) {
+  // }
 
-// ExpTy transExp(Absyn.ArrayExp e) {}
+  ExpTy transExp(Absyn.ArrayExp e) {
+    ExpTy size = transExp(e.size);
+    ExpTy init = transExp(e.init);
 
-//ExpTy transExp(Absyn.CallExp e) {}
-    //in CallExp making sure that in the function call the 
-    //passed params match the type of the declared params 
+    if (!size.ty.coerceTo(INT)) {
+      error(e.pos, "Arrays must have size of an INT");
+    }
+    return new ExpTy(null, init.ty);
+  }
 
-// ExpTy transExp(Absyn.ForExp e) {}
-    //use depth
-    //maybe start another scope?
+  ExpTy transExp(Absyn.CallExp e) {
+    Entry x = (Entry)env.venv.get(e.func);
+
+    if(!(x instanceof FunEntry)) {
+      error(e.pos, "function expected");
+      return new ExpTy(null, INT);
+    }
+    FunEntry funEntry = (FunEntry)x;
+    Types.RECORD form = funEntry.formals;
+    Absyn.ExpList el = e.args;
+
+    if((form != null || el != null)) {
+        error(e.pos, "Wrong # of parameters :(");
+    }
+
+    return new ExpTy(null, funEntry.result); 
+  }
+ 
+
+  ExpTy transExp(Absyn.ForExp e) {
+    env.venv.beginScope();
+    Exp var = transDec((Absyn.Dec)e.var);
+
+    ExpTy hi = transExp(e.hi);
+    checkInt(hi, e.hi.pos);
+    ExpTy body = transExp(e.body);
+    env.venv.endScope();
+    return new ExpTy(null, body.ty);
+  }
 
 
   private ExpTy transVar(Absyn.Var v){
@@ -242,8 +273,19 @@ public class Semant {
     return new ExpTy(null, INT);
   }
 
-//MUST HAVE A RECORD!!
-//  ExpTy transVar(Absyn.FieldVar v) {}
+
+  //has to be a record of the variable
+  ExpTy transVar(Absyn.FieldVar v) {
+    Types.Type temp = transVar(v.var).ty.actual();
+    if (!(temp instanceof Types.RECORD)) {
+      error(v.var.pos, "No record");
+      return new ExpTy(null, INT);
+    }
+    for(Types.RECORD i = (Types.RECORD)temp; i != null; i = i.tail) {
+      return new ExpTy(null, i.actual());
+    }
+    return new ExpTy(null, INT);
+  }
 
 
   // ExpTy transVar(Absyn.SubscriptVar v) {
@@ -286,55 +328,74 @@ public class Semant {
     return null;
   }
 
-Exp transDec(Absyn.TypeDec d) { 
-  //inserting names for all types
-  for(Absyn.TypeDec type = d; type != null; type = type.next) {
-      //making sure theyre defined a single time!!
-      for(Absyn.TypeDec x = d; x != type; x = x.next) {
-        if(x.name == type.name){
-          error(x.pos, "This type was alreasy declared!");
+  Exp transDec(Absyn.TypeDec d) { 
+    //inserting names for all types
+    for(Absyn.TypeDec type = d; type != null; type = type.next) {
+        //making sure theyre defined a single time!!
+        for(Absyn.TypeDec x = d; x != type; x = x.next) {
+          if(x.name == type.name){
+            error(x.pos, "This type was alreasy declared!");
+          }
         }
-      }
-      //add it to the environment? idk if this is correct
-      env.tenv.put(type.name, new Types.NAME(type.name));
-  }
-  //have to bind type to name in this loop, and also make sure we arent looping
-  //maybe need the helper function that checks for looping
-  for(Absyn.TypeDec type = d; type != null; type = type.next) {
-      //i do not know how to do that! :)
-      return null;
-  }
-  return null;
-}
-
-
-//Exp transDec(Absyn.FunctionDec d) {
-
-
-
-
-Type transTy(Absyn.Ty t){ 
-    if ((t instanceof Absyn.NameTy)) {
-      return transTy((Absyn.NameTy)t);
+        //add it to the environment? idk if this is correct
+        env.tenv.put(d.name, transTy(d.ty));
     }
-    // if ((t instanceof RecordTy)) {
-    //   return transTy((RecordTy)t);
-    // }
-    // if ((t instanceof ArrayTy)) {
-    //   return transTy((ArrayTy)t);
-    // }
-    throw new Error("Error translating type :(");
-}
-
-Type transTy(Absyn.NameTy t) {
-  Types.Type type = (Types.Type)env.tenv.get(t.name);
-  if (type == null){
-    error(t.pos, "The type " + t.name + "is not defined!");
-    type = INT;
+    //have to bind type to name in this loop, and also make sure we arent looping
+    //maybe need the helper function that checks for looping
+    for(Absyn.TypeDec type = d; type != null; type = type.next) {
+        //i do not know how to do that! :)
+        return null;
+    }
+    return null;
   }
-  return type;
-}
-//Type transTy(Absyn.ArrayTy t) {}
-//Type transTy(Absyn.RecordTy t) {}
+
+
+  Exp transDec(Absyn.FunctionDec d) {
+    Types.Type result = transTy(d.result);
+    Types.RECORD formals = transTypeFields(d.params);
+    env.venv.put(d.name, new FunEntry(formals, result));
+    env.venv.beginScope();
+    for(Absyn.FieldList p = d.params; p!= null; p = p.tail) {
+      env.venv.put(p.name, new VarEntry((Types.Type)env.tenv.get(p.typ)));
+    }
+    transExp(d.body);
+    env.venv.endScope();
+    return null;
+  }
+
+
+  Type transTy(Absyn.Ty t){ 
+      if ((t instanceof Absyn.NameTy)) {
+        return transTy((Absyn.NameTy)t);
+      }
+      if ((t instanceof Absyn.RecordTy)) {
+         return transTy((Absyn.RecordTy)t);
+      }
+      // if ((t instanceof Absyn.ArrayTy)) {
+      //   return transTy((Abysn.ArrayTy)t);
+      // }
+      throw new Error("Error translating type :(");
+  }
+
+  Type transTy(Absyn.NameTy t) {
+    Types.Type type = (Types.Type)env.tenv.get(t.name);
+    if (type == null){
+      error(t.pos, "The type " + t.name + "is not defined!");
+      type = INT;
+    }
+    return type;
+  }
+
+  Type transTy(Absyn.RecordTy t) {
+    return transTypeFields(t.fields);
+  }
+
+  Types.RECORD transTypeFields(Absyn.FieldList f) {
+    Types.Type temp = (Types.Type)env.tenv.get(f.typ);
+
+    return new Types.RECORD(f.name, temp, transTypeFields(f.tail));
+
+  }
+
 }
 
