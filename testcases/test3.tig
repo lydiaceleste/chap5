@@ -1,0 +1,6 @@
+typedef {nameVar:string, age:int} rectype
+var rec1:rectype := rectype {nameVar="Nobody", age=1000}
+in
+	rec1.nameVar := "Somebody";
+	rec1
+end

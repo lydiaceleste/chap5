@@ -4,10 +4,8 @@ import Types.Type;
 
 
 // LEFT TO COMPLETE
-//    Exp: Record, Array, Call, For
-//    Var: Field, Subscript
-//    Dec: TypeDec, FunctionDec
-//    Ty: Name, Record, Array
+
+//    Ty: Name, Array
 
 public class Semant {
   Env env;
@@ -34,15 +32,15 @@ public class Semant {
 
   private Exp checkInt(ExpTy et, int pos) {
     if (!INT.coerceTo(et.ty))
-      error(pos, "integer required");
+      error(pos, "integer required, not found");
     return et.exp;
   }
-  //&& (!(type == Types.RECORD)) && (!(type == Types.ARRAY)) for some reason are not working
   private Exp compCheck(ExpTy et, int pos){
     Type type = et.ty.actual();
-    if ((!(type == INT)) && (!(type == STRING)) && 
-    (!(type == NIL))) {
-      error(pos, "Oh no! Types are not comparable :(");
+    if (type instanceof Types.RECORD || type instanceof Types.ARRAY) {
+      error(pos, "Cannot compare records and arrays");
+    } else if (type != INT && type != STRING && type != NIL) {
+      error(pos, "Types are not comparable :(");
     }
     return et.exp;
   }
@@ -143,17 +141,18 @@ public class Semant {
   }
 
   ExpTy transExp(Absyn.IfExp e) {
-    //cant handle empty else
     ExpTy test = transExp(e.test);
     checkInt(test, e.test.pos);
     ExpTy thenclause = transExp(e.thenclause);
-    ExpTy elseclause = transExp(e.elseclause);
-    if(elseclause != null) {
-        if((!thenclause.ty.coerceTo(elseclause.ty)) && !elseclause.ty.coerceTo(thenclause.ty))
-        {
-           error(e.pos, "Type Mismatch.");
+    ExpTy elseclause = null;
+    if (e.elseclause != null) {
+        elseclause = transExp(e.elseclause);
+        if (!thenclause.ty.coerceTo(elseclause.ty) && !elseclause.ty.coerceTo(thenclause.ty)) {
+            error(e.pos, "Type Mismatch.");
         }
-    }
+    } else if (!thenclause.ty.coerceTo(VOID)) {
+        error(e.pos, "Missing else-clause not VOID.");
+      }
     return new ExpTy(null, thenclause.ty);
   }
 
@@ -208,50 +207,89 @@ public class Semant {
      return transVar(e.var);
   }
 
-  // ExpTy transExp(Absyn.RecordExp e) {
-  // }
+  ExpTy transExp(Absyn.RecordExp e) {
+    ExpTy init = transExp(e.fields.init);
+    for(Absyn.FieldExpList f = e.fields.tail; f != null; f = f.tail)
+    {
+      transExp(f.init);
+    }
+    Types.RECORD recordType = (Types.RECORD)env.tenv.get(e.typ);
+    return new ExpTy(init.exp, recordType);
+  }
 
   ExpTy transExp(Absyn.ArrayExp e) {
-    ExpTy size = transExp(e.size);
-    ExpTy init = transExp(e.init);
-
-    if (!size.ty.coerceTo(INT)) {
-      error(e.pos, "Arrays must have size of an INT");
+    Type resultType = (Type)env.tenv.get(e.typ);
+    if (resultType == null) {
+        error(e.pos, "undefined type " + e.typ);
+        return new ExpTy(null, VOID);
+    } else if (!(resultType instanceof Types.ARRAY)) {
+        error(e.pos, "array type expected");
+        return new ExpTy(null, VOID);
+    } else {
+        Types.ARRAY arrayType = (Types.ARRAY)resultType;
+        ExpTy sizeExpTy = transExp(e.size);
+        if (!sizeExpTy.ty.coerceTo(INT)) {
+            error(e.size.pos, "array size must be an integer");
+        }
+        ExpTy initExpTy = transExp(e.init);
+        if (!initExpTy.ty.coerceTo(arrayType.element)) {
+            error(e.init.pos, "array initialization type mismatch");
+        }
+        return new ExpTy(null, arrayType);
     }
-    return new ExpTy(null, init.ty);
   }
-
+  
   ExpTy transExp(Absyn.CallExp e) {
     Entry x = (Entry)env.venv.get(e.func);
-
-    if(!(x instanceof FunEntry)) {
-      error(e.pos, "function expected");
-      return new ExpTy(null, INT);
+    if (x == null) {
+        error(e.pos, "Function " + e.func + " undefined");
+        return new ExpTy(null, INT);
+    } else if (!(x instanceof FunEntry)) {
+        error(e.pos, e.func + " is not a function");
+        return new ExpTy(null, INT);
     }
-    FunEntry funEntry = (FunEntry)x;
-    Types.RECORD form = funEntry.formals;
-    Absyn.ExpList el = e.args;
-
-    if((form != null || el != null)) {
-        error(e.pos, "Wrong # of parameters :(");
+    FunEntry f = (FunEntry) x;
+    Types.RECORD expected = f.formals;
+    Absyn.ExpList args = e.args;
+    int i = 0;
+    while (expected != null && args != null) {
+        ExpTy arg = transExp(args.head);
+        if (!arg.ty.coerceTo(expected.fieldType)) {
+            error(args.head.pos, "Parameter type mismatch in argument " + (i + 1));
+        }
+        expected = expected.tail;
+        args = args.tail;
+        i++;
     }
-
-    return new ExpTy(null, funEntry.result); 
+    return new ExpTy(null, f.result);
   }
- 
 
   ExpTy transExp(Absyn.ForExp e) {
     env.venv.beginScope();
-    Exp var = transDec((Absyn.Dec)e.var);
-
+    Types.Type varTy = null;
+    if (e.var instanceof Absyn.SimpleVar) {
+        Absyn.SimpleVar var = (Absyn.SimpleVar)e.var;
+        VarEntry varEntry = (VarEntry)env.venv.get(var.name);
+        varTy = varEntry.ty;
+    } else if (e.var instanceof Absyn.VarDec) {
+        Absyn.VarDec var = (Absyn.VarDec)e.var;
+        if (var.typ != null) {
+            varTy = transTy(var.typ);
+        } else {
+            varTy = INT;
+        }
+        env.venv.put(var.name, new VarEntry(varTy));
+    } else {
+        error(e.var.pos, "Invalid loop variable declaration");
+    }
     ExpTy hi = transExp(e.hi);
     checkInt(hi, e.hi.pos);
     ExpTy body = transExp(e.body);
     env.venv.endScope();
     return new ExpTy(null, body.ty);
+    
   }
-
-
+ 
   private ExpTy transVar(Absyn.Var v){
     if (v instanceof Absyn.SimpleVar)
       return transVar((Absyn.SimpleVar)v);
@@ -265,14 +303,17 @@ public class Semant {
 
   ExpTy transVar(Absyn.SimpleVar v) {
     Entry x = (Entry)env.venv.get(v.name);
-    if (x instanceof VarEntry) {
-      VarEntry vent = (VarEntry)x;
+    if (x == null) {
+      error(v.pos, "Variable " + v.name + " is undefined.");
+      return new ExpTy(null, VOID);
+    } else if (x instanceof VarEntry) {
+      VarEntry vent = (VarEntry) x;
       return new ExpTy(null, vent.ty.actual());
+    } else {
+      error(v.pos, "Expected variable, but found function " + v.name + ".");
+      return new ExpTy(null, VOID);
     }
-    error(v.pos, "Variable is undefined.");
-    return new ExpTy(null, INT);
   }
-
 
   //has to be a record of the variable
   ExpTy transVar(Absyn.FieldVar v) {
@@ -287,13 +328,21 @@ public class Semant {
     return new ExpTy(null, INT);
   }
 
+  ExpTy transVar(Absyn.SubscriptVar v) {
+    ExpTy var = transVar(v.var);
+    ExpTy index = transExp(v.index);
 
-  // ExpTy transVar(Absyn.SubscriptVar v) {
-  //   ExpTy var = transVar(v.var);
-  //   ExpTy index = transExp(v.in);
-
-  // }
-
+    if (!(var.ty instanceof Types.ARRAY)) {
+      error(v.var.pos, "Variable is not an array");
+      return new ExpTy(null, INT);  
+    }
+    if (!(index.ty instanceof Types.INT)) {
+      error(v.index.pos, "Index is not an integer");
+      return new ExpTy(null, INT);
+    }
+    Types.ARRAY arrayType = (Types.ARRAY) var.ty;
+    return new ExpTy(null, arrayType.element);
+  }
 
   Exp transDec(Absyn.Dec d) {
     if (d instanceof Absyn.VarDec)
@@ -306,7 +355,6 @@ public class Semant {
   }
 
   Exp transDec(Absyn.VarDec d) {
-    // I FINISHED THIS, BUT WONT WORK UNTIL transTY is done!!!!
     ExpTy init = transExp(d.init);
     Type type;
     if (d.typ == null) {
@@ -316,11 +364,11 @@ public class Semant {
       type = init.ty;
     } else {
       type = transTy(d.typ);
-      if(!init.ty.coerceTo(type)) {
-        error(d.pos, "Incompatable types :(");
-      }
       if(type == null) {
         error(d.pos, "Undefined type:(");
+      }
+      if(!init.ty.coerceTo(type)) {
+        error(d.pos, "Incompatable types :(");
       }
     }
     d.entry = new VarEntry(type);
@@ -329,26 +377,16 @@ public class Semant {
   }
 
   Exp transDec(Absyn.TypeDec d) { 
-    //inserting names for all types
-    for(Absyn.TypeDec type = d; type != null; type = type.next) {
-        //making sure theyre defined a single time!!
-        for(Absyn.TypeDec x = d; x != type; x = x.next) {
-          if(x.name == type.name){
-            error(x.pos, "This type was alreasy declared!");
-          }
+    for (Absyn.TypeDec type = d; type != null; type = type.next) {
+        for (Absyn.TypeDec x = d; x != type; x = x.next) {
+            if (x.name == type.name) {
+                error(x.pos, "Type '" + x.name + "' already declared!");
+            }
         }
-        //add it to the environment? idk if this is correct
-        env.tenv.put(d.name, transTy(d.ty));
-    }
-    //have to bind type to name in this loop, and also make sure we arent looping
-    //maybe need the helper function that checks for looping
-    for(Absyn.TypeDec type = d; type != null; type = type.next) {
-        //i do not know how to do that! :)
-        return null;
+        env.tenv.put(type.name, transTy(type.ty));
     }
     return null;
   }
-
 
   Exp transDec(Absyn.FunctionDec d) {
     Types.Type result = transTy(d.result);
@@ -363,7 +401,6 @@ public class Semant {
     return null;
   }
 
-
   Type transTy(Absyn.Ty t){ 
       if ((t instanceof Absyn.NameTy)) {
         return transTy((Absyn.NameTy)t);
@@ -371,9 +408,9 @@ public class Semant {
       if ((t instanceof Absyn.RecordTy)) {
          return transTy((Absyn.RecordTy)t);
       }
-      // if ((t instanceof Absyn.ArrayTy)) {
-      //   return transTy((Abysn.ArrayTy)t);
-      // }
+      if ((t instanceof Absyn.ArrayTy)) {
+         return transTy((Absyn.ArrayTy)t);
+       }
       throw new Error("Error translating type :(");
   }
 
@@ -390,11 +427,22 @@ public class Semant {
     return transTypeFields(t.fields);
   }
 
+  Type transTy(Absyn.ArrayTy t) {
+    Absyn.ArrayTy arrayTy = (Absyn.ArrayTy) t;
+    Types.Type elementType = (Types.Type) env.tenv.get(arrayTy.typ);
+    if (elementType == null)
+    {
+      error(t.pos, "Unknown type");
+    }
+  return new Types.ARRAY(elementType);
+  }
+
   Types.RECORD transTypeFields(Absyn.FieldList f) {
     Types.Type temp = (Types.Type)env.tenv.get(f.typ);
-
-    return new Types.RECORD(f.name, temp, transTypeFields(f.tail));
-
+    if (f.tail != null)
+      return new Types.RECORD(f.name, temp, transTypeFields(f.tail));
+    else  
+      return null;
   }
 
 }
