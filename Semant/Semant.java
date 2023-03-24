@@ -204,6 +204,10 @@ public class Semant {
   }
 
   ExpTy transExp(Absyn.RecordExp e) {
+    if (e.fields == null){
+      error(e.pos, "Unknown type");
+      return null;
+    }
     ExpTy init = transExp(e.fields.init);
     for(Absyn.FieldExpList f = e.fields.tail; f != null; f = f.tail)
     {
@@ -247,7 +251,23 @@ public class Semant {
     FunEntry f = (FunEntry) x;
     Types.RECORD expected = f.formals;
     Absyn.ExpList args = e.args;
+    int expectedCount = 0;
+    while (expected != null) {
+        expectedCount++;
+        expected = expected.tail;
+    }
+    int actualCount = 0;
+    while (args != null) {
+        actualCount++;
+        args = args.tail;
+    }
+    if (expectedCount != actualCount) {
+        error(e.pos, "Function " + e.func + " expects " + expectedCount + " arguments, but " + actualCount + " were provided");
+        return new ExpTy(null, INT);
+    }
     int i = 0;
+    expected = f.formals;
+    args = e.args;
     while (expected != null && args != null) {
         ExpTy arg = transExp(args.head);
         if (!arg.ty.coerceTo(expected.fieldType)) {
@@ -418,17 +438,21 @@ public class Semant {
   }
 
   Type transTy(Absyn.RecordTy t) {
+    if (t == null || t.fields == null) {
+        error(t.pos, "Record can't be empty");
+        return null;
+    }
     return transTypeFields(t.fields);
   }
 
   Type transTy(Absyn.ArrayTy t) {
     Absyn.ArrayTy arrayTy = (Absyn.ArrayTy) t;
-    Types.Type elementType = (Types.Type) env.tenv.get(arrayTy.typ);
-    if (elementType == null)
+    Types.Type elem = (Types.Type)env.tenv.get(arrayTy.typ);
+    if (elem == null)
     {
       error(t.pos, "Unknown type");
     }
-    return new Types.ARRAY(elementType);
+    return new Types.ARRAY(elem);
   }
 
   Types.RECORD transTypeFields(Absyn.FieldList f) {
