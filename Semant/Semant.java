@@ -3,10 +3,6 @@ import Translate.Exp;
 import Types.Type;
 
 
-// LEFT TO COMPLETE
-
-//    Ty: Name, Array
-
 public class Semant {
   Env env;
   public Semant(ErrorMsg.ErrorMsg err) {
@@ -35,6 +31,7 @@ public class Semant {
       error(pos, "integer required, not found");
     return et.exp;
   }
+
   private Exp compCheck(ExpTy et, int pos){
     Type type = et.ty.actual();
     if (type instanceof Types.RECORD || type instanceof Types.ARRAY) {
@@ -177,21 +174,20 @@ public class Semant {
     return type;
   }
 
-  //mayB use depth for boundary check
   ExpTy transExp(Absyn.BreakExp e) {
     return new ExpTy(null, VOID);
   }
 
-  // int depth = 0;
   ExpTy transExp(Absyn.WhileExp e) {
-     // depth++;
-      Type type = transExp(e.test).ty;
-      if(type != INT) {
+    Type test = transExp(e.test).ty;
+    if (test != INT) {
         error(e.pos, "Test clause MUST be an int :(");
-        type = INT;
-      }
-     // depth--;
-      return new ExpTy(null, VOID);
+    }
+    ExpTy body = transExp(e.body);
+    if (body.ty != VOID) {
+        error(e.pos, "While loop body MUST evaluate to void :(");
+    }
+    return new ExpTy(null, VOID);
   }
 
   ExpTy transExp(Absyn.AssignExp e) {
@@ -218,24 +214,24 @@ public class Semant {
   }
 
   ExpTy transExp(Absyn.ArrayExp e) {
-    Type resultType = (Type)env.tenv.get(e.typ);
-    if (resultType == null) {
+    Type result = (Type)env.tenv.get(e.typ);
+    if (result == null) {
         error(e.pos, "undefined type " + e.typ);
         return new ExpTy(null, VOID);
-    } else if (!(resultType instanceof Types.ARRAY)) {
+    } else if (!(result instanceof Types.ARRAY)) {
         error(e.pos, "array type expected");
         return new ExpTy(null, VOID);
     } else {
-        Types.ARRAY arrayType = (Types.ARRAY)resultType;
-        ExpTy sizeExpTy = transExp(e.size);
-        if (!sizeExpTy.ty.coerceTo(INT)) {
+        Types.ARRAY at = (Types.ARRAY)result;
+        ExpTy size = transExp(e.size);
+        if (!size.ty.coerceTo(INT)) {
             error(e.size.pos, "array size must be an integer");
         }
-        ExpTy initExpTy = transExp(e.init);
-        if (!initExpTy.ty.coerceTo(arrayType.element)) {
+        ExpTy init = transExp(e.init);
+        if (!init.ty.coerceTo(at.element)) {
             error(e.init.pos, "array initialization type mismatch");
         }
-        return new ExpTy(null, arrayType);
+        return new ExpTy(null, at);
     }
   }
   
@@ -287,7 +283,6 @@ public class Semant {
     ExpTy body = transExp(e.body);
     env.venv.endScope();
     return new ExpTy(null, body.ty);
-    
   }
  
   private ExpTy transVar(Absyn.Var v){
@@ -315,7 +310,6 @@ public class Semant {
     }
   }
 
-  //has to be a record of the variable
   ExpTy transVar(Absyn.FieldVar v) {
     Types.Type temp = transVar(v.var).ty.actual();
     if (!(temp instanceof Types.RECORD)) {
@@ -340,8 +334,8 @@ public class Semant {
       error(v.index.pos, "Index is not an integer");
       return new ExpTy(null, INT);
     }
-    Types.ARRAY arrayType = (Types.ARRAY) var.ty;
-    return new ExpTy(null, arrayType.element);
+    Types.ARRAY at = (Types.ARRAY) var.ty;
+    return new ExpTy(null, at.element);
   }
 
   Exp transDec(Absyn.Dec d) {
@@ -434,7 +428,7 @@ public class Semant {
     {
       error(t.pos, "Unknown type");
     }
-  return new Types.ARRAY(elementType);
+    return new Types.ARRAY(elementType);
   }
 
   Types.RECORD transTypeFields(Absyn.FieldList f) {
